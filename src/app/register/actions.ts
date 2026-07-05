@@ -2,6 +2,7 @@
 
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
+import { getDatabaseSetupError } from "@/lib/prisma-errors";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { AuthError } from "next-auth";
 import { Prisma } from "@prisma/client";
@@ -77,17 +78,12 @@ export async function registerUser(
           success: false,
         };
       }
-      console.error("Registration Prisma error:", error);
-      return {
-        error: "Database error. Ensure the server database is configured and migrated.",
-        success: false,
-      };
     }
 
-    if (error instanceof Prisma.PrismaClientInitializationError) {
-      console.error("Registration DB connection error:", error);
+    const databaseError = getDatabaseSetupError(error);
+    if (databaseError) {
       return {
-        error: "Database connection failed. Please try again later.",
+        error: databaseError,
         success: false,
       };
     }

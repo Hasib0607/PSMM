@@ -87,12 +87,14 @@ if ! npx prisma db push 2>&1; then
   echo "Common fixes:"
   echo "  1. Hosting panel থেকে PostgreSQL database + user create করো"
   echo "  2. .env এ DATABASE_URL সেই user/password দিয়ে set করো"
-  echo "  3. Same VPS + Docker: npm run docker:up (user/pass = DATABASE_URL এর সাথে match)"
+  echo "  3. App Docker container হলে host 127.0.0.1 না দিয়ে postgres/service name দাও"
+  echo "  4. Same VPS + app host process: npm run docker:up (user/pass = DATABASE_URL এর সাথে match)"
   echo ""
   echo "P1000 = wrong username or password in DATABASE_URL"
   echo "P1001 = PostgreSQL server not running / wrong host"
   echo "Example:"
   echo '  DATABASE_URL="postgresql://psmm:psmm@127.0.0.1:5432/psmm"'
+  echo '  DATABASE_URL="postgresql://psmm:psmm@postgres:5432/psmm"'
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 1
 fi

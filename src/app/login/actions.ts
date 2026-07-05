@@ -2,6 +2,7 @@
 
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
+import { getDatabaseSetupError } from "@/lib/prisma-errors";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { AuthError } from "next-auth";
 
@@ -21,14 +22,14 @@ export async function loginUser(
     };
   }
 
-  const user = await db.user.findUnique({
-    where: { email: email.toLowerCase() },
-    include: { brandProfile: true },
-  });
-
-  const redirectTo = user?.brandProfile ? "/dashboard" : "/onboarding";
-
   try {
+    const user = await db.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { brandProfile: true },
+    });
+
+    const redirectTo = user?.brandProfile ? "/dashboard" : "/onboarding";
+
     await signIn("credentials", {
       email,
       password,
@@ -47,6 +48,12 @@ export async function loginUser(
           return { error: "An unexpected authentication error occurred.", success: false };
       }
     }
+
+    const databaseError = getDatabaseSetupError(error);
+    if (databaseError) {
+      return { error: databaseError, success: false };
+    }
+
     throw error;
   }
 }
