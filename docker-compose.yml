@@ -5,9 +5,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: psmm
-      POSTGRES_USER: psmm
-      POSTGRES_PASSWORD: psmm
+      POSTGRES_DB: ${POSTGRES_DB:-psmm}
+      POSTGRES_USER: ${POSTGRES_USER:-psmm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-psmm}
     volumes:
       - psmm_postgres_data:/var/lib/postgresql/data
 
