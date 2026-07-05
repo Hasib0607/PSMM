@@ -3,6 +3,8 @@
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { AuthError } from "next-auth";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -60,7 +62,37 @@ export async function registerUser(
     });
 
     return { success: true, error: null };
-  } catch {
-    return { error: "Failed to create account. Please try again.", success: false };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return {
+        error: "Account created but sign-in failed. Please try logging in.",
+        success: false,
+      };
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        return {
+          error: "Unable to create account. If you already have an account, try logging in.",
+          success: false,
+        };
+      }
+      console.error("Registration Prisma error:", error);
+      return {
+        error: "Database error. Ensure the server database is configured and migrated.",
+        success: false,
+      };
+    }
+
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      console.error("Registration DB connection error:", error);
+      return {
+        error: "Database connection failed. Please try again later.",
+        success: false,
+      };
+    }
+
+    // NextAuth signIn throws a redirect on success — must rethrow
+    throw error;
   }
 }
