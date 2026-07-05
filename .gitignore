@@ -22,6 +22,15 @@
 
 # misc
 .DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+._*
+**/._*
+.Spotlight-V100
+.Trashes
+**/.Spotlight-V100
+**/.Trashes
 *.pem
 
 # debug
@@ -39,3 +48,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PSMM Sessions & Screenshots
+src/data/sessions/
+private/screenshots/

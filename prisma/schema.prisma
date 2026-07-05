@@ -1,0 +1,299 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  facebook
+  instagram
+  linkedin
+  youtube
+  tiktok
+  all
+}
+
+enum ConnectionType {
+  browser_session
+  appium_device
+  oauth
+}
+
+enum DraftStatus {
+  draft
+  needs_review
+  approved
+  scheduled
+  published
+  failed
+}
+
+enum InputSource {
+  manual
+  inbox
+  voice
+  url
+  occasion
+  batch
+}
+
+enum InboxItemType {
+  link
+  note
+  screenshot
+  voice
+}
+
+enum InboxItemStatus {
+  new
+  used
+  archived
+}
+
+enum SpecialDayCategory {
+  bd_national
+  international
+  religious
+  sports
+  personal
+}
+
+enum DateType {
+  fixed
+  lunar
+  variable
+}
+
+enum OccasionAlertResponse {
+  pending
+  yes
+  no
+  snoozed
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  brandProfile      BrandProfile?
+  postingGoals      PostingGoal[]
+  drafts            ContentDraft[]
+  inboxItems        InspirationInbox[]
+  captionTemplates  CaptionTemplate[]
+  postStreak        PostStreak?
+  socialAccounts    SocialAccount[]
+  occasionPrefs     UserOccasionPreference?
+  personalOccasions PersonalOccasion[]
+  occasionAlerts    OccasionAlert[]
+  competitorAccounts CompetitorAccount[]
+  rssFeeds           RssFeed[]
+}
+
+model BrandProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profession       String?
+  niche            String?
+  targetAudience   String?
+  brandTone        String   @default("friendly")
+  language         String   @default("banglish")
+  contentPillars   Json?
+  defaultPostTarget Int     @default(2)
+  automationPaused  Boolean  @default(false)
+  telegramChatId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model PostingGoal {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform        Platform  @default(all)
+  targetDate      DateTime? @db.Date
+  targetCount     Int       @default(2)
+  publishedCount  Int       @default(0)
+  scheduledCount  Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, platform, targetDate])
+  @@index([userId, targetDate])
+}
+
+model SpecialDay {
+  id          String             @id @default(cuid())
+  name        String
+  nameBn      String?
+  category    SpecialDayCategory
+  religion    String?
+  dateType    DateType           @default(fixed)
+  month       Int?
+  day         Int?
+  dateRule    String?
+  description String?
+  createdAt   DateTime           @default(now())
+
+  occasionAlerts OccasionAlert[]
+
+  @@index([month, day])
+  @@index([category])
+}
+
+model UserOccasionPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories       Json     @default("[\"bd_national\",\"international\",\"religious\"]")
+  religions        Json     @default("[]")
+  alertEnabled     Boolean  @default(true)
+  alertTime        String   @default("20:00")
+  alertChannel     String   @default("in_app")
+  snoozedOccasions Json     @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model PersonalOccasion {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  date         DateTime @db.Date
+  recurring    Boolean  @default(true)
+  alertEnabled Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model OccasionAlert {
+  id              String                @id @default(cuid())
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialDayId    String
+  specialDay      SpecialDay            @relation(fields: [specialDayId], references: [id], onDelete: Cascade)
+  alertDate       DateTime              @db.Date
+  userResponse    OccasionAlertResponse @default(pending)
+  generatedIdeas  Json?
+  draftId         String?
+  createdAt       DateTime              @default(now())
+
+  @@index([userId, alertDate])
+}
+
+model ContentDraft {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceIdea        String
+  inputSource       InputSource @default(manual)
+  platformVersions  Json
+  approvedPlatforms Json        @default("[]")
+  status            DraftStatus @default(draft)
+  occasionTag       String?
+  scheduledAt       DateTime?
+  publishedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, scheduledAt])
+}
+
+model InspirationInbox {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      InboxItemType
+  content   String
+  title     String?
+  tags      Json            @default("[]")
+  status    InboxItemStatus @default(new)
+  draftId   String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId, status])
+}
+
+model CaptionTemplate {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  structure     String
+  platform      Platform @default(all)
+  usageCount    Int      @default(0)
+  avgEngagement Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model PostStreak {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastPostDate  DateTime? @db.Date
+  updatedAt     DateTime  @updatedAt
+}
+
+model SocialAccount {
+  id                      String         @id @default(cuid())
+  userId                  String
+  user                    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform                Platform
+  accountType             String         @default("personal")
+  connectionType          ConnectionType
+  sessionStatePath        String?
+  deviceId                String?
+  oauthTokenEncrypted     String?
+  lastHealthCheckAt       DateTime?
+  automationFailCount     Int            @default(0)
+  automationScriptVersion String?
+  isManualOnly            Boolean        @default(false)
+  isActive                Boolean        @default(true)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  @@unique([userId, platform])
+}
+
+model CompetitorAccount {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform      Platform
+  accountUrl    String
+  lastCheckedAt DateTime?
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model RssFeed {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedUrl       String
+  niche         String?
+  lastFetchedAt DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+}
+
