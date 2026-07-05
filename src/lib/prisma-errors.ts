@@ -2,6 +2,14 @@ import { Prisma } from "@prisma/client";
 
 const LOCAL_DATABASE_HOST_PATTERN = /@(localhost|127\.0\.0\.1|\[::1\])(?::|\/)/i;
 
+function getDatabaseHost() {
+  try {
+    return new URL(process.env.DATABASE_URL ?? "").hostname;
+  } catch {
+    return null;
+  }
+}
+
 function usesLocalDatabaseHost() {
   return LOCAL_DATABASE_HOST_PATTERN.test(process.env.DATABASE_URL ?? "");
 }
@@ -9,6 +17,10 @@ function usesLocalDatabaseHost() {
 export function getDatabaseSetupError(error: unknown) {
   if (error instanceof Prisma.PrismaClientInitializationError) {
     console.error("Prisma database initialization failed:", error.message);
+
+    if (process.env.NODE_ENV === "production" && getDatabaseHost() === "postgres") {
+      return "DATABASE_URL host is set to postgres, which only works when the app runs inside the same Docker Compose network. Use 127.0.0.1 for same-server PostgreSQL, or the database host from your hosting panel.";
+    }
 
     if (process.env.NODE_ENV === "production" && usesLocalDatabaseHost()) {
       return "Database is not reachable from the live server. Update DATABASE_URL to the live PostgreSQL host, or run PostgreSQL on the same server.";
