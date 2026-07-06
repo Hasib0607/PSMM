@@ -5,6 +5,23 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+load_env_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+
+  echo "==> Loading environment from $file"
+  set -a
+  # shellcheck disable=SC1090
+  source "$file"
+  set +a
+}
+
+load_env_file ".env"
+load_env_file ".env.production"
+load_env_file ".env.local"
+
 if [ "${SKIP_DB_SETUP:-}" = "true" ]; then
   echo "==> SKIP_DB_SETUP=true — skipping database setup."
   exit 0
@@ -13,8 +30,8 @@ fi
 if [ -z "${DATABASE_URL:-}" ]; then
   echo ""
   echo "ERROR: DATABASE_URL is not set."
-  echo "Add to server .env file, e.g.:"
-  echo '  DATABASE_URL="postgresql://psmm:psmm@127.0.0.1:5432/psmm"'
+  echo "Add it in the hosting env panel or in .env/.env.production, e.g.:"
+  echo '  DATABASE_URL="postgresql://ecommercex_me:YOUR_PASSWORD@127.0.0.1:5432/ecommercex_me"'
   echo ""
   exit 1
 fi
@@ -28,20 +45,27 @@ is_local_host() {
 
 # Parse postgresql://user:pass@host:port/db from DATABASE_URL for Docker env
 sync_docker_postgres_env() {
-  if ! command -v node >/dev/null 2>&1; then
+  local url="${DATABASE_URL#postgresql://}"
+  url="${url#postgres://}"
+
+  if [ "$url" = "$DATABASE_URL" ]; then
     return 0
   fi
-  eval "$(node <<'NODE'
-const raw = process.env.DATABASE_URL || "";
-const match = raw.match(/^postgres(?:ql)?:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/([^?]+)/);
-if (!match) process.exit(0);
-const [, user, pass = "", db] = match;
-const esc = (s) => s.replace(/'/g, "'\\''");
-console.log(`export POSTGRES_USER='${esc(decodeURIComponent(user))}'`);
-console.log(`export POSTGRES_PASSWORD='${esc(decodeURIComponent(pass))}'`);
-console.log(`export POSTGRES_DB='${esc(db)}'`);
-NODE
-)"
+
+  local auth="${url%%@*}"
+  local rest="${url#*@}"
+  local db_name="${rest#*/}"
+  db_name="${db_name%%\?*}"
+  local db_user="${auth%%:*}"
+  local db_pass=""
+
+  if [ "$auth" != "$db_user" ]; then
+    db_pass="${auth#*:}"
+  fi
+
+  export POSTGRES_USER="$db_user"
+  export POSTGRES_PASSWORD="$db_pass"
+  export POSTGRES_DB="$db_name"
 }
 
 ensure_local_postgres() {
