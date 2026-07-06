@@ -1,6 +1,7 @@
 "use server";
 
 import { signIn } from "@/auth";
+import { ensureDatabaseSchema } from "@/lib/database-schema";
 import { db } from "@/lib/db";
 import { getDatabaseSetupError } from "@/lib/prisma-errors";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -14,6 +15,34 @@ const RegisterSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
+
+async function createUserAndSignIn(name: string, email: string, password: string) {
+  const existingUser = await db.user.findUnique({ where: { email } });
+  if (existingUser) {
+    return {
+      error: "Unable to create account. If you already have an account, try logging in.",
+      success: false,
+    };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  await db.user.create({
+    data: {
+      name,
+      email,
+      passwordHash,
+    },
+  });
+
+  await signIn("credentials", {
+    email,
+    password,
+    redirectTo: "/onboarding",
+  });
+
+  return { success: true, error: null };
+}
 
 export async function registerUser(
   prevState: unknown,
@@ -38,31 +67,7 @@ export async function registerUser(
   }
 
   try {
-    const existingUser = await db.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return {
-        error: "Unable to create account. If you already have an account, try logging in.",
-        success: false,
-      };
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    await db.user.create({
-      data: {
-        name,
-        email,
-        passwordHash,
-      },
-    });
-
-    await signIn("credentials", {
-      email,
-      password,
-      redirectTo: "/onboarding",
-    });
-
-    return { success: true, error: null };
+    return await createUserAndSignIn(name, email, password);
   } catch (error) {
     if (error instanceof AuthError) {
       return {
@@ -77,6 +82,10 @@ export async function registerUser(
           error: "Unable to create account. If you already have an account, try logging in.",
           success: false,
         };
+      }
+
+      if (await ensureDatabaseSchema(error)) {
+        return await createUserAndSignIn(name, email, password);
       }
     }
 

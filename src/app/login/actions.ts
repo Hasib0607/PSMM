@@ -1,10 +1,27 @@
 "use server";
 
 import { signIn } from "@/auth";
+import { ensureDatabaseSchema } from "@/lib/database-schema";
 import { db } from "@/lib/db";
 import { getDatabaseSetupError } from "@/lib/prisma-errors";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { AuthError } from "next-auth";
+
+async function findUserAndSignIn(email: string, password: string) {
+  const user = await db.user.findUnique({
+    where: { email: email.toLowerCase() },
+    include: { brandProfile: true },
+  });
+
+  const redirectTo = user?.brandProfile ? "/dashboard" : "/onboarding";
+
+  await signIn("credentials", {
+    email,
+    password,
+    redirectTo,
+  });
+  return { success: true, error: null };
+}
 
 export async function loginUser(
   prevState: unknown,
@@ -23,19 +40,7 @@ export async function loginUser(
   }
 
   try {
-    const user = await db.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { brandProfile: true },
-    });
-
-    const redirectTo = user?.brandProfile ? "/dashboard" : "/onboarding";
-
-    await signIn("credentials", {
-      email,
-      password,
-      redirectTo,
-    });
-    return { success: true, error: null };
+    return await findUserAndSignIn(email, password);
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
@@ -47,6 +52,10 @@ export async function loginUser(
         default:
           return { error: "An unexpected authentication error occurred.", success: false };
       }
+    }
+
+    if (await ensureDatabaseSchema(error)) {
+      return await findUserAndSignIn(email, password);
     }
 
     const databaseError = getDatabaseSetupError(error);
