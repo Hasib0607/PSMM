@@ -45,6 +45,20 @@ npm run dev
 
 Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
 
+## Server Setup
+
+On a live server, run the guided setup once:
+
+```bash
+npm run setup:server
+```
+
+It creates `.env`, generates secrets, pushes the Prisma database schema, seeds data, and then you can start the app with:
+
+```bash
+npm start
+```
+
 ## Project Structure
 
 ```
