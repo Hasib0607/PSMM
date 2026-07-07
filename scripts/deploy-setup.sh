@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$ROOT/.cache/ms-playwright}"
+
 load_env_file() {
   local file="$1"
   if [ ! -f "$file" ]; then
@@ -101,6 +103,30 @@ ensure_local_postgres() {
 }
 
 ensure_local_postgres
+
+ensure_playwright_browser() {
+  if ! command -v npx >/dev/null 2>&1; then
+    echo "==> WARNING: npx not found; skipping Playwright browser install."
+    return 0
+  fi
+
+  mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+
+  if compgen -G "$PLAYWRIGHT_BROWSERS_PATH/chromium-*/chrome-linux/chrome" >/dev/null || \
+     compgen -G "$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell" >/dev/null; then
+    echo "==> Playwright Chromium already installed."
+    return 0
+  fi
+
+  echo "==> Installing Playwright Chromium browser..."
+  if ! npx playwright install chromium; then
+    echo "==> WARNING: Playwright Chromium install failed."
+    echo "    Facebook connect/publish will fail until this succeeds:"
+    echo "    npx playwright install chromium"
+  fi
+}
+
+ensure_playwright_browser
 
 echo "==> Prisma: pushing schema to database..."
 if ! npx prisma db push 2>&1; then

@@ -1,18 +1,89 @@
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { PublishResult } from "@/types";
 import { decryptText } from "@/lib/crypto";
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_PLAYWRIGHT_BROWSERS_PATH = path.join(
+  process.cwd(),
+  ".cache",
+  "ms-playwright",
+);
+
+function ensurePlaywrightBrowsersPath() {
+  const browsersPath =
+    process.env.PLAYWRIGHT_BROWSERS_PATH || DEFAULT_PLAYWRIGHT_BROWSERS_PATH;
+
+  process.env.PLAYWRIGHT_BROWSERS_PATH = browsersPath;
+  fs.mkdirSync(browsersPath, { recursive: true });
+
+  return browsersPath;
+}
+
+function isMissingBrowserError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("Executable doesn't exist") ||
+    message.includes("Please run the following command to download new browsers")
+  );
+}
+
+async function installChromiumBrowser() {
+  const browsersPath = ensurePlaywrightBrowsersPath();
+
+  try {
+    await execFileAsync(
+      "npx",
+      ["playwright", "install", "chromium"],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+        },
+      },
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown Playwright install error.";
+
+    throw new Error(
+      `Playwright browser install failed on the server. Run "npx playwright install chromium" once, then try again. ${message}`,
+    );
+  }
+}
+
+async function launchChromiumBrowser() {
+  ensurePlaywrightBrowsersPath();
+
+  try {
+    return await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  } catch (error) {
+    if (!isMissingBrowserError(error)) {
+      throw error;
+    }
+
+    await installChromiumBrowser();
+
+    return chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
+}
 
 async function createBrowserContext(cookiesPath: string) {
   if (!fs.existsSync(cookiesPath)) {
     throw new Error("Facebook session cookies file not found. Please connect your account first.");
   }
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await launchChromiumBrowser();
 
   const context = await browser.newContext({
     userAgent:
