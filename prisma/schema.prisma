@@ -100,12 +100,25 @@ model BrandProfile {
   id               String   @id @default(cuid())
   userId           String   @unique
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String?
   profession       String?
   niche            String?
+  tagline          String?
   targetAudience   String?
+  audienceDetails  String?
   brandTone        String   @default("friendly")
+  tone             String   @default("professional")
   language         String   @default("banglish")
   contentPillars   Json?
+  contentPillarDetails Json @default("[]")
+  roles            Json     @default("[]")
+  niches           Json     @default("[]")
+  audienceSegments Json     @default("[]")
+  personality      Json     @default("[]")
+  goals            Json     @default("{}")
+  socialPreferences Json    @default("[]")
+  contentPreferences Json   @default("{}")
+  references       Json     @default("{}")
   defaultPostTarget Int     @default(2)
   automationPaused  Boolean  @default(false)
   telegramChatId    String?
@@ -296,4 +309,3 @@ model RssFeed {
 
   @@index([userId])
 }
-
