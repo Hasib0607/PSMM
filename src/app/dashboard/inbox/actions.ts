@@ -16,7 +16,8 @@ const InboxItemSchema = z.object({
   tags: z.array(z.string()).default([]),
 });
 
-export async function createInboxItem(prevState: any, formData: FormData): Promise<{ error: string | null; success: boolean }> {
+export async function createInboxItem(prevState: unknown, formData: FormData): Promise<{ error: string | null; success: boolean }> {
+  void prevState;
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated", success: false };
 
@@ -49,7 +50,8 @@ export async function createInboxItem(prevState: any, formData: FormData): Promi
   }
 }
 
-export async function updateInboxItem(id: string, prevState: any, formData: FormData): Promise<{ error: string | null; success: boolean }> {
+export async function updateInboxItem(id: string, prevState: unknown, formData: FormData): Promise<{ error: string | null; success: boolean }> {
+  void prevState;
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated", success: false };
 
@@ -140,21 +142,10 @@ export async function transformItemToDraft(id: string, platforms: string[]) {
       return { error: "Please complete your brand onboarding profile first." };
     }
 
-    const brandData = {
-      profession: brandProfile.profession || "",
-      niche: brandProfile.niche || "",
-      targetAudience: brandProfile.targetAudience || "",
-      brandTone: brandProfile.brandTone,
-      language: brandProfile.language,
-      contentPillars: Array.isArray(brandProfile.contentPillars)
-        ? (brandProfile.contentPillars as string[])
-        : [],
-    };
-
     // Adapt content using OpenAI
     const adaptedContent = await adaptIdeaToPlatforms(
       item.content,
-      brandData,
+      brandProfile,
       platformResult.data,
     );
 
@@ -183,8 +174,9 @@ export async function transformItemToDraft(id: string, platforms: string[]) {
     revalidatePath("/dashboard/drafts");
     revalidatePath("/dashboard");
     return { success: true, draftId: draft.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Transform error:", error);
-    return { error: error.message || "Failed to transform inspiration item to draft" };
+    const message = error instanceof Error ? error.message : "Failed to transform inspiration item to draft";
+    return { error: message };
   }
 }

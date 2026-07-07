@@ -4,8 +4,14 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { OpenAI } from "openai";
+import { Platform } from "@prisma/client";
 import { isSafeUrl } from "@/lib/ssrf";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { formatBrandContextForPrompt, getBrandKeywords } from "@/lib/brand-profile-context";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export async function addRssFeed(
   feedUrl: string,
@@ -37,9 +43,9 @@ export async function addRssFeed(
 
     revalidatePath("/dashboard/research");
     return { success: true, error: null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Add RSS Feed Error:", error);
-    return { error: error.message || "Failed to add RSS feed.", success: false };
+    return { error: getErrorMessage(error, "Failed to add RSS feed."), success: false };
   }
 }
 
@@ -56,9 +62,9 @@ export async function deleteRssFeed(id: string): Promise<{ error: string | null;
 
     revalidatePath("/dashboard/research");
     return { success: true, error: null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete RSS Feed Error:", error);
-    return { error: error.message || "Failed to delete RSS feed.", success: false };
+    return { error: getErrorMessage(error, "Failed to delete RSS feed."), success: false };
   }
 }
 
@@ -80,7 +86,7 @@ export async function addCompetitor(
     await db.competitorAccount.create({
       data: {
         userId: session.user.id,
-        platform: platform as any,
+        platform: platform as Platform,
         accountUrl,
         notes,
       },
@@ -88,9 +94,9 @@ export async function addCompetitor(
 
     revalidatePath("/dashboard/research");
     return { success: true, error: null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Add Competitor Error:", error);
-    return { error: error.message || "Failed to add competitor account.", success: false };
+    return { error: getErrorMessage(error, "Failed to add competitor account."), success: false };
   }
 }
 
@@ -107,9 +113,9 @@ export async function deleteCompetitor(id: string): Promise<{ error: string | nu
 
     revalidatePath("/dashboard/research");
     return { success: true, error: null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete Competitor Error:", error);
-    return { error: error.message || "Failed to delete competitor account.", success: false };
+    return { error: getErrorMessage(error, "Failed to delete competitor account."), success: false };
   }
 }
 
@@ -135,6 +141,9 @@ export async function fetchTrendSuggestions(): Promise<{
   try {
     const feeds = await db.rssFeed.findMany({
       where: { userId: session.user.id, active: true },
+    });
+    const brandProfile = await db.brandProfile.findUnique({
+      where: { userId: session.user.id },
     });
 
     if (feeds.length === 0) {
@@ -202,6 +211,7 @@ export async function fetchTrendSuggestions(): Promise<{
     }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const brandKeywords = brandProfile ? getBrandKeywords(brandProfile).slice(0, 12) : [];
 
     // Build OpenAI research prompt
     const articlesPrompt = scrapedArticles
@@ -214,7 +224,9 @@ export async function fetchTrendSuggestions(): Promise<{
         {
           role: "system",
           content:
-            "You are a professional social media researcher and strategist. Review the articles below and identify key trending topics. Generate exactly 3 creative social media post ideas. Return your output strictly as a JSON array of objects matching this schema: " +
+            "You are a professional social media researcher and strategist. Review the articles below and identify key trending topics. Generate exactly 3 creative social media post ideas that fit the user's saved brand profile, audience, content pillars, goals, and platform preferences. Prioritize topics related to these brand keywords when relevant: " +
+            (brandKeywords.length ? brandKeywords.join(", ") : "general brand growth") +
+            ". Return your output strictly as a JSON array of objects matching this schema: " +
             JSON.stringify([
               {
                 title: "Short catchy title for the idea",
@@ -223,7 +235,10 @@ export async function fetchTrendSuggestions(): Promise<{
               },
             ]),
         },
-        { role: "user", content: `Articles list:\n${articlesPrompt}` },
+        {
+          role: "user",
+          content: `Brand Profile:\n${brandProfile ? formatBrandContextForPrompt(brandProfile) : "No brand profile saved yet."}\n\nArticles list:\n${articlesPrompt}`,
+        },
       ],
     });
 
@@ -250,9 +265,9 @@ export async function fetchTrendSuggestions(): Promise<{
     revalidatePath("/dashboard/inbox");
     revalidatePath("/dashboard/research");
     return { success: true, error: null, count: parsedIdeas.length };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Trends scraper failure:", error);
-    return { error: error.message || "Scraper failed.", success: false };
+    return { error: getErrorMessage(error, "Scraper failed."), success: false };
   }
 }
 

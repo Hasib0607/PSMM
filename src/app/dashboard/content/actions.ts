@@ -92,20 +92,9 @@ export async function generateDraft(
   }
 
   try {
-    const brandData = {
-      profession: brandProfile.profession || "",
-      niche: brandProfile.niche || "",
-      targetAudience: brandProfile.targetAudience || "",
-      brandTone: brandProfile.brandTone,
-      language: brandProfile.language,
-      contentPillars: Array.isArray(brandProfile.contentPillars)
-        ? (brandProfile.contentPillars as string[])
-        : [],
-    };
-
     const adaptedContent = await adaptIdeaToPlatforms(
       result.data.idea,
-      brandData,
+      brandProfile,
       platformResult.data,
       templateStructure,
     );

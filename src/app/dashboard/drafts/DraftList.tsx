@@ -1,24 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Trash2, ChevronDown, ChevronUp, Share2, Eye, Clock, ExternalLink } from "lucide-react";
+import { Calendar, Trash2, ChevronDown, ChevronUp, Share2, Search, SlidersHorizontal } from "lucide-react";
 import { deleteDraft, publishDraft, approveDraft } from "./actions";
 
+type PlatformVersion = {
+  title?: string;
+  hook?: string;
+  caption?: string;
+  cta?: string;
+  videoConcept?: string;
+  imagePrompt?: string;
+  description?: string;
+  hashtags?: string[];
+  tags?: string[];
+  [key: string]: unknown;
+};
+
+type DraftItem = {
+  id: string;
+  sourceIdea: string;
+  inputSource: string;
+  platformVersions: Record<string, PlatformVersion>;
+  status: string;
+  occasionTag?: string | null;
+  scheduledAt?: Date | string | null;
+  createdAt: Date | string;
+};
+
+type RawDraftItem = Omit<DraftItem, "platformVersions"> & {
+  platformVersions: unknown;
+};
+
 interface DraftListProps {
-  initialDrafts: any[];
+  initialDrafts: RawDraftItem[];
+}
+
+function normalizePlatformVersions(value: unknown): Record<string, PlatformVersion> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([platform, content]) => [
+      platform,
+      content && typeof content === "object" && !Array.isArray(content)
+        ? (content as PlatformVersion)
+        : {},
+    ]),
+  );
 }
 
 export function DraftList({ initialDrafts }: DraftListProps) {
-  const [drafts, setDrafts] = useState<any[]>(initialDrafts);
+  const [drafts, setDrafts] = useState<DraftItem[]>(() =>
+    initialDrafts.map((draft) => ({
+      ...draft,
+      platformVersions: normalizePlatformVersions(draft.platformVersions),
+    })),
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activePlatformTab, setActivePlatformTab] = useState<{ [draftId: string]: string }>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [scheduleDates, setScheduleDates] = useState<{ [draftId: string]: string }>({});
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
 
   const handleApprove = async (draftId: string) => {
     setApprovingId(draftId);
@@ -56,7 +106,7 @@ export function DraftList({ initialDrafts }: DraftListProps) {
     }
   };
 
-  const toggleExpand = (id: string, platformVersions: any) => {
+  const toggleExpand = (id: string, platformVersions: Record<string, PlatformVersion>) => {
     if (expandedId === id) {
       setExpandedId(null);
     } else {
@@ -99,6 +149,34 @@ export function DraftList({ initialDrafts }: DraftListProps) {
     }
   };
 
+  const platformOptions = useMemo(() => {
+    const platforms = new Set<string>();
+    drafts.forEach((draft) => Object.keys(draft.platformVersions || {}).forEach((platform) => platforms.add(platform)));
+    return Array.from(platforms).sort();
+  }, [drafts]);
+
+  const filteredDrafts = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return drafts.filter((draft) => {
+      const platforms = Object.keys(draft.platformVersions || {});
+      const searchableText = JSON.stringify({
+        sourceIdea: draft.sourceIdea,
+        inputSource: draft.inputSource,
+        status: draft.status,
+        occasionTag: draft.occasionTag,
+        platformVersions: draft.platformVersions,
+      }).toLowerCase();
+
+      const matchesQuery = !normalizedQuery || searchableText.includes(normalizedQuery);
+      const matchesStatus = statusFilter === "all" || draft.status === statusFilter;
+      const matchesPlatform = platformFilter === "all" || platforms.includes(platformFilter);
+      const matchesSource = sourceFilter === "all" || draft.inputSource === sourceFilter;
+
+      return matchesQuery && matchesStatus && matchesPlatform && matchesSource;
+    });
+  }, [drafts, platformFilter, query, sourceFilter, statusFilter]);
+
   if (drafts.length === 0) {
     return (
       <Card className="bg-zinc-950/40 border-zinc-900 text-white backdrop-blur-sm">
@@ -118,7 +196,75 @@ export function DraftList({ initialDrafts }: DraftListProps) {
 
   return (
     <div className="space-y-4">
-      {drafts.map((draft) => {
+      <Card className="bg-zinc-950/40 border-zinc-900 text-white backdrop-blur-sm">
+        <CardContent className="p-4">
+          <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px]">
+            <label className="relative block">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search drafts, captions, hashtags, platforms..."
+                className="h-11 w-full rounded-md border border-zinc-800 bg-zinc-950/60 pl-10 pr-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500"
+              />
+            </label>
+            <label className="relative block">
+              <SlidersHorizontal className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="h-11 w-full appearance-none rounded-md border border-zinc-800 bg-zinc-950/60 pl-10 pr-8 text-sm text-zinc-100 outline-none transition-colors focus:border-purple-500"
+              >
+                <option value="all">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="needs_review">Needs review</option>
+                <option value="approved">Approved</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="published">Published</option>
+                <option value="failed">Failed</option>
+              </select>
+            </label>
+            <select
+              value={platformFilter}
+              onChange={(event) => setPlatformFilter(event.target.value)}
+              className="h-11 w-full rounded-md border border-zinc-800 bg-zinc-950/60 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-purple-500"
+            >
+              <option value="all">All platforms</option>
+              {platformOptions.map((platform) => (
+                <option key={platform} value={platform}>
+                  {getPlatformLabel(platform)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={sourceFilter}
+              onChange={(event) => setSourceFilter(event.target.value)}
+              className="h-11 w-full rounded-md border border-zinc-800 bg-zinc-950/60 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-purple-500"
+            >
+              <option value="all">All sources</option>
+              <option value="manual">Manual</option>
+              <option value="inbox">Inbox</option>
+              <option value="batch">Batch</option>
+              <option value="voice">Voice</option>
+              <option value="url">URL</option>
+              <option value="occasion">Occasion</option>
+            </select>
+          </div>
+          <p className="mt-3 text-xs text-zinc-500">
+            Showing {filteredDrafts.length} of {drafts.length} drafts
+          </p>
+        </CardContent>
+      </Card>
+
+      {filteredDrafts.length === 0 && (
+        <Card className="bg-zinc-950/40 border-zinc-900 text-white backdrop-blur-sm">
+          <CardContent className="py-12 text-center text-sm text-zinc-500">
+            No drafts match your current search or filters.
+          </CardContent>
+        </Card>
+      )}
+
+      {filteredDrafts.map((draft) => {
         const isExpanded = expandedId === draft.id;
         const platforms = Object.keys(draft.platformVersions || {});
         const activeTab = activePlatformTab[draft.id] || (platforms.length > 0 ? platforms[0] : "");

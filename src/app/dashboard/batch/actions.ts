@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getUpcomingSpecialDays } from "@/lib/special-days";
 import { OpenAI } from "openai";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { formatBrandContextForPrompt, getActivePlatforms } from "@/lib/brand-profile-context";
 
 export async function generateWeeklyPlan(): Promise<{
   error: string | null;
@@ -52,15 +53,20 @@ export async function generateWeeklyPlan(): Promise<{
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Format prompts
-    const brandPrompt = `
-- Profession: ${brandProfile.profession || "Expert"}
-- Niche: ${brandProfile.niche || "General"}
-- Target Audience: ${brandProfile.targetAudience || "General public"}
-- Brand Tone: ${brandProfile.brandTone || "friendly"}
-- Language: ${brandProfile.language || "banglish"} (mix of Bengali/English using English or Bengali scripts)
-- Content Pillars: ${Array.isArray(brandProfile.contentPillars) ? (brandProfile.contentPillars as string[]).join(", ") : "General topics"}
-    `;
+    const activePlatforms = getActivePlatforms(brandProfile);
+    const plannerPlatforms = activePlatforms.length
+      ? activePlatforms.filter((platform) => platform !== "all")
+      : ["facebook", "linkedin"];
+    const selectedPlannerPlatforms = plannerPlatforms.length ? plannerPlatforms : ["facebook", "linkedin"];
+    const platformSchema = selectedPlannerPlatforms.reduce<Record<string, unknown>>((acc, platform) => {
+      acc[platform] = {
+        hook: `${platform} hook text`,
+        caption: `${platform} main post caption`,
+        cta: `${platform} CTA text where relevant`,
+        hashtags: ["tag1", "tag2"],
+      };
+      return acc;
+    }, {});
 
     const occasionsPrompt = upcomingOccasions.length > 0
       ? upcomingOccasions.map(o => `- Occasion: "${o.name}" in ${o.daysUntil} days`).join("\n")
@@ -77,8 +83,7 @@ Given the User's Brand Profile, upcoming occasions, and recent inspiration logs,
 For EACH of the 7 days (Day 1 through Day 7), you must produce:
 1. Core Concept (a short summary topic)
 2. Content Pillar matched
-3. Facebook Adaptation (hook, caption, hashtags)
-4. LinkedIn Adaptation (hook, caption, cta, hashtags)
+3. Platform adaptations for these platforms only: ${selectedPlannerPlatforms.join(", ")}
 
 All text must strictly align with the user's Brand Tone and Language preferences (mix of Bangla and English if "banglish").
 Format your output strictly as a JSON object containing a "calendar" array with exactly 7 items:
@@ -88,17 +93,7 @@ Format your output strictly as a JSON object containing a "calendar" array with 
       "dayIndex": 1,
       "pillar": "pillar name",
       "coreConcept": "Core post topic summary",
-      "facebook": {
-        "hook": "Facebook hook text",
-        "caption": "Facebook main post caption",
-        "hashtags": ["tag1", "tag2"]
-      },
-      "linkedin": {
-        "hook": "LinkedIn hook text",
-        "caption": "LinkedIn main post caption",
-        "cta": "LinkedIn CTA text",
-        "hashtags": ["tag3", "tag4"]
-      }
+      "platforms": ${JSON.stringify(platformSchema)}
     }
   ]
 }
@@ -110,7 +105,7 @@ Format your output strictly as a JSON object containing a "calendar" array with 
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Brand Profile:\n${brandPrompt}\n\nUpcoming Holidays:\n${occasionsPrompt}\n\nInspirations:\n${inboxPrompt}`,
+          content: `Brand Profile:\n${formatBrandContextForPrompt(brandProfile)}\n\nUpcoming Holidays:\n${occasionsPrompt}\n\nInspirations:\n${inboxPrompt}`,
         },
       ],
     });
@@ -128,12 +123,14 @@ Format your output strictly as a JSON object containing a "calendar" array with 
       scheduledDate.setDate(scheduledDate.getDate() + item.dayIndex - 1);
       scheduledDate.setHours(10, 0, 0, 0); // Default scheduler time 10:00 AM
 
-      const platformVersions = {
-        facebook: item.facebook,
-        linkedin: item.linkedin,
-      };
+      const platformVersions = item.platforms && typeof item.platforms === "object"
+        ? item.platforms
+        : selectedPlannerPlatforms.reduce<Record<string, unknown>>((acc, platform) => {
+            if (item[platform]) acc[platform] = item[platform];
+            return acc;
+          }, {});
 
-      const draft = await db.contentDraft.create({
+      await db.contentDraft.create({
         data: {
           userId: session.user.id,
           sourceIdea: item.coreConcept,
@@ -175,8 +172,9 @@ Format your output strictly as a JSON object containing a "calendar" array with 
     revalidatePath("/dashboard/drafts");
     revalidatePath("/dashboard/batch");
     return { success: true, error: null, count: calendar.length };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to batch plan weekly calendar:", error);
-    return { error: error.message || "Failed to generate weekly plan.", success: false };
+    const message = error instanceof Error ? error.message : "Failed to generate weekly plan.";
+    return { error: message, success: false };
   }
 }

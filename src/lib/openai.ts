@@ -1,5 +1,6 @@
 import { OpenAI } from "openai";
 import { z } from "zod";
+import { BrandProfilePromptInput, formatBrandContextForPrompt } from "@/lib/brand-profile-context";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -35,16 +36,11 @@ const PlatformContentSchema = z.object({
   }).optional(),
 });
 
+type PlatformContent = z.infer<typeof PlatformContentSchema>;
+
 export async function adaptIdeaToPlatforms(
   idea: string,
-  brandProfile: {
-    profession: string;
-    niche: string;
-    targetAudience: string;
-    brandTone: string;
-    language: string;
-    contentPillars: string[];
-  },
+  brandProfile: BrandProfilePromptInput,
   platforms: string[],
   templateStructure?: string
 ) {
@@ -58,14 +54,9 @@ export async function adaptIdeaToPlatforms(
   }
 
   let systemPrompt = `You are a social media branding expert. You specialize in taking a single core idea and adapting it to multiple platforms while maintaining a consistent personal brand voice.
-  
-  User Profile:
-  - Profession: ${brandProfile.profession}
-  - Niche: ${brandProfile.niche}
-  - Target Audience: ${brandProfile.targetAudience}
-  - Brand Tone: ${brandProfile.brandTone}
-  - Language: ${brandProfile.language} (If "banglish", write in a natural mix of Bengali and English using English script or Bengali script where appropriate. If "bangla", write in Bengali. If "english", write in English).
-  - Content Pillars: ${brandProfile.contentPillars.join(", ")}
+
+  User Brand Profile:
+${formatBrandContextForPrompt(brandProfile)}
   
   Adapt the core idea to the requested platforms: ${platforms.join(", ")}.
   
@@ -137,7 +128,7 @@ export async function adaptIdeaToPlatforms(
   }
 
   // Filter content to only return requested platforms
-  const filteredContent: any = {};
+  const filteredContent: Partial<PlatformContent> = {};
   platforms.forEach(platform => {
     if (platform === "facebook" && validated.facebook) filteredContent.facebook = validated.facebook;
     if (platform === "instagram" && validated.instagram) filteredContent.instagram = validated.instagram;
