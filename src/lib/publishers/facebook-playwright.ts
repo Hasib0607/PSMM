@@ -1,4 +1,3 @@
-import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
@@ -37,7 +36,7 @@ async function installChromiumBrowser() {
   try {
     await execFileAsync(
       "npx",
-      ["playwright", "install", "chromium"],
+      ["playwright", "install"],
       {
         cwd: process.cwd(),
         env: {
@@ -51,18 +50,23 @@ async function installChromiumBrowser() {
       error instanceof Error ? error.message : "Unknown Playwright install error.";
 
     throw new Error(
-      `Playwright browser install failed on the server. Run "npx playwright install chromium" once, then try again. ${message}`,
+      `Playwright browser install failed on the server. Run "PLAYWRIGHT_BROWSERS_PATH=${browsersPath} npx playwright install" once, then try again. ${message}`,
     );
   }
 }
 
 async function launchChromiumBrowser() {
-  ensurePlaywrightBrowsersPath();
+  const browsersPath = ensurePlaywrightBrowsersPath();
+  const { chromium } = await import("playwright");
 
   try {
     return await chromium.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+      },
     });
   } catch (error) {
     if (!isMissingBrowserError(error)) {
@@ -74,6 +78,10 @@ async function launchChromiumBrowser() {
     return chromium.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+      },
     });
   }
 }

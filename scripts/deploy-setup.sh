@@ -118,11 +118,11 @@ ensure_playwright_browser() {
     return 0
   fi
 
-  echo "==> Installing Playwright Chromium browser..."
-  if ! npx playwright install chromium; then
-    echo "==> WARNING: Playwright Chromium install failed."
+  echo "==> Installing Playwright browsers..."
+  if ! PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" npx playwright install; then
+    echo "==> WARNING: Playwright browser install failed."
     echo "    Facebook connect/publish will fail until this succeeds:"
-    echo "    npx playwright install chromium"
+    echo "    PLAYWRIGHT_BROWSERS_PATH=\"$PLAYWRIGHT_BROWSERS_PATH\" npx playwright install"
   fi
 }
 

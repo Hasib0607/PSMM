@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
-    "start": "bash scripts/deploy-setup.sh && next start",
+    "start": "PLAYWRIGHT_BROWSERS_PATH=\"$(pwd)/.cache/ms-playwright\" bash scripts/deploy-setup.sh && PLAYWRIGHT_BROWSERS_PATH=\"$(pwd)/.cache/ms-playwright\" next start",
     "setup:server": "bash scripts/server-setup.sh",
     "db:setup": "bash scripts/deploy-setup.sh",
     "docker:up": "bash scripts/start-docker.sh",
