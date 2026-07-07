@@ -132,7 +132,7 @@ const defaultPlatforms: PlatformPreference[] = [
   { id: "linkedin", name: "LinkedIn", enabled: true, purpose: "Build Authority", contentFocus: "Thought leadership, Insights" },
   { id: "youtube", name: "YouTube", enabled: true, purpose: "Educate & Grow", contentFocus: "Tutorials, Vlogs, Tips" },
   { id: "facebook", name: "Facebook", enabled: true, purpose: "Community Building", contentFocus: "Tips, Updates, Live" },
-  { id: "x", name: "X", enabled: false, purpose: "Brand Awareness", contentFocus: "Short updates, Thoughts" },
+  { id: "tiktok", name: "TikTok", enabled: false, purpose: "Brand Awareness", contentFocus: "Short videos, Trends" },
 ];
 
 const platformMeta = {
@@ -140,7 +140,7 @@ const platformMeta = {
   linkedin: { icon: Badge, color: "text-sky-400" },
   youtube: { icon: SquarePlay, color: "text-red-400" },
   facebook: { icon: MessageCircle, color: "text-blue-400" },
-  x: { icon: Hash, color: "text-zinc-100" },
+  tiktok: { icon: Hash, color: "text-zinc-100" },
 };
 
 function makeId(label: string) {
@@ -690,7 +690,7 @@ export default function OnboardingForm({ initialData, name }: OnboardingFormProp
           <SectionCard number={7} title="Social Media Preferences" subtitle="Select the platforms you're active on and your preferences" icon={Target}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               {platforms.map((platform) => {
-                const meta = platformMeta[platform.id as keyof typeof platformMeta] || platformMeta.x;
+                const meta = platformMeta[platform.id as keyof typeof platformMeta] || platformMeta.tiktok;
                 const PlatformIcon = meta.icon;
                 return (
                   <div key={platform.id} className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
