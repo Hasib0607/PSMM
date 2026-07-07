@@ -30,6 +30,15 @@ function isMissingBrowserError(error: unknown) {
   );
 }
 
+function isMissingSystemLibraryError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("error while loading shared libraries") ||
+    message.includes("libnspr4.so") ||
+    message.includes("libnss3.so")
+  );
+}
+
 async function installChromiumBrowser() {
   const browsersPath = ensurePlaywrightBrowsersPath();
 
@@ -69,6 +78,12 @@ async function launchChromiumBrowser() {
       },
     });
   } catch (error) {
+    if (isMissingSystemLibraryError(error)) {
+      throw new Error(
+        "This server is missing Linux libraries required by Playwright (for example libnspr4/libnss3). Facebook cookies can be saved, but browser automation will not run until the server installs the required system packages.",
+      );
+    }
+
     if (!isMissingBrowserError(error)) {
       throw error;
     }

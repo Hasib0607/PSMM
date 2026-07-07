@@ -6,7 +6,41 @@ import { revalidatePath } from "next/cache";
 import fs from "fs";
 import path from "path";
 import { encryptText } from "@/lib/crypto";
-import { verifyFacebookSession } from "@/lib/publishers/facebook-playwright";
+
+type FacebookCookie = {
+  name?: string;
+  value?: string;
+  domain?: string;
+};
+
+function validateFacebookCookies(cookies: FacebookCookie[]) {
+  const hasFacebookDomain = cookies.some(
+    (cookie) =>
+      typeof cookie.domain === "string" &&
+      cookie.domain.toLowerCase().includes("facebook.com"),
+  );
+
+  if (!hasFacebookDomain) {
+    return "Cookies must include facebook.com domains.";
+  }
+
+  const requiredCookies = ["c_user", "xs"];
+  const missingCookies = requiredCookies.filter(
+    (name) =>
+      !cookies.some(
+        (cookie) =>
+          cookie.name === name &&
+          typeof cookie.value === "string" &&
+          cookie.value.trim().length > 0,
+      ),
+  );
+
+  if (missingCookies.length > 0) {
+    return `Missing required Facebook cookies: ${missingCookies.join(", ")}. Export fresh logged-in cookies and try again.`;
+  }
+
+  return null;
+}
 
 export async function saveFacebookSession(
   prevState: any,
@@ -24,9 +58,14 @@ export async function saveFacebookSession(
 
   try {
     // Validate cookies are valid JSON
-    const parsedCookies = JSON.parse(cookiesStr.trim());
+    const parsedCookies = JSON.parse(cookiesStr.trim()) as FacebookCookie[];
     if (!Array.isArray(parsedCookies)) {
       return { error: "Cookies must be a valid JSON array of cookie objects.", success: false };
+    }
+
+    const cookieValidationError = validateFacebookCookies(parsedCookies);
+    if (cookieValidationError) {
+      return { error: cookieValidationError, success: false };
     }
 
     // Ensure session directory exists
@@ -38,19 +77,6 @@ export async function saveFacebookSession(
     const sessionPath = path.join(sessionDir, `fb_${session.user.id}.json`);
     const encrypted = encryptText(JSON.stringify(parsedCookies));
     fs.writeFileSync(sessionPath, encrypted, "utf8");
-
-    const health = await verifyFacebookSession(sessionPath);
-    if (!health.ok) {
-      try {
-        fs.unlinkSync(sessionPath);
-      } catch {
-        // ignore cleanup errors
-      }
-      return {
-        error: health.error || "Facebook session verification failed. Please export fresh cookies.",
-        success: false,
-      };
-    }
 
     // Upsert SocialAccount in database
     await db.socialAccount.upsert({
@@ -64,7 +90,7 @@ export async function saveFacebookSession(
         connectionType: "browser_session",
         sessionStatePath: sessionPath,
         isActive: true,
-        lastHealthCheckAt: new Date(),
+        lastHealthCheckAt: null,
       },
       create: {
         userId: session.user.id,
@@ -72,7 +98,7 @@ export async function saveFacebookSession(
         connectionType: "browser_session",
         sessionStatePath: sessionPath,
         isActive: true,
-        lastHealthCheckAt: new Date(),
+        lastHealthCheckAt: null,
       },
     });
 
